@@ -1,0 +1,21 @@
+# Env files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Backend (Python)
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.egg-info/
+backend/.pytest_cache/
+*.pyc
+
+# Frontend (Next.js) — see frontend/.gitignore for the full generated list
+frontend/node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
