@@ -18,9 +18,9 @@
 - [x] Write tests: at least one allow case and one deny case per rule type
 
 ## Phase 4: Rate Limiting
-- [ ] Implement Redis-backed limiter (per agent, per action type, per time window)
-- [ ] Wire limiter into the decision flow (limiter runs before/alongside policy engine)
-- [ ] Test: exceeding the limit produces a DENY with a clear reason
+- [x] Implement Redis-backed limiter (per agent, per action type, per time window)
+- [x] Wire limiter into the decision flow (limiter runs before/alongside policy engine)
+- [x] Test: exceeding the limit produces a DENY with a clear reason
 
 ## Phase 5: Approval Workflow
 - [ ] Build approval queue table + API endpoints (list pending, approve, reject)
