@@ -13,9 +13,9 @@
 - [x] Seed a couple of test agents and policy rules
 
 ## Phase 3: Policy Engine
-- [ ] Define policy rule format (action type → allow/deny/needs_approval + conditions)
-- [ ] Implement rule evaluator (pure function, no side effects)
-- [ ] Write tests: at least one allow case and one deny case per rule type
+- [x] Define policy rule format (action type → allow/deny/needs_approval + conditions)
+- [x] Implement rule evaluator (pure function, no side effects)
+- [x] Write tests: at least one allow case and one deny case per rule type
 
 ## Phase 4: Rate Limiting
 - [ ] Implement Redis-backed limiter (per agent, per action type, per time window)
