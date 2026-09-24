@@ -32,6 +32,9 @@ class DecisionCode(StrEnum):
     ACTION_NOT_PERMITTED = "action_not_permitted"
     NO_MATCHING_RULE = "no_matching_rule"
     POLICY_ERROR = "policy_error"
+    # Set by the decision flow after policy evaluation, not by `evaluate` itself.
+    RATE_LIMITED = "rate_limited"
+    RATE_LIMITER_UNAVAILABLE = "rate_limiter_unavailable"
 
 
 # Lower number = more restrictive; used to break exact ties safely.

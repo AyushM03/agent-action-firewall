@@ -1,4 +1,4 @@
-"""Seed demo agents and policy rules for local development.
+"""Seed demo agents, policy rules and rate limits for local development.
 
 Idempotent: re-running only inserts rows that don't exist yet.
 Usage (from backend/):  python -m app.seed
@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import async_session, engine
-from app.models import Agent, PolicyEffect, PolicyRule
+from app.models import Agent, PolicyEffect, PolicyRule, RateLimit
 
 AGENTS = [
     {
@@ -47,6 +47,14 @@ RULES = [
     ),
 ]
 
+# (agent name or None for the default, action_type, max_requests, window_seconds)
+RATE_LIMITS = [
+    (None, "send_email", 10, 60),
+    (None, "make_payment", 5, 60),
+    ("demo-payments-agent", "make_payment", 3, 60),
+    ("demo-payments-agent", "make_payment", 20, 86400),
+]
+
 
 async def seed(session: AsyncSession) -> None:
     agents_by_name: dict[str, Agent] = {}
@@ -80,6 +88,26 @@ async def seed(session: AsyncSession) -> None:
                 )
             )
             print(f"+ rule {agent_name or '*'} / {action_type} -> {effect}")
+
+    for agent_name, action_type, max_requests, window_seconds in RATE_LIMITS:
+        agent_id = agents_by_name[agent_name].id if agent_name else None
+        exists = await session.scalar(
+            select(RateLimit.id).where(
+                RateLimit.agent_id.is_(None) if agent_id is None else RateLimit.agent_id == agent_id,
+                RateLimit.action_type == action_type,
+                RateLimit.window_seconds == window_seconds,
+            )
+        )
+        if exists is None:
+            session.add(
+                RateLimit(
+                    agent_id=agent_id,
+                    action_type=action_type,
+                    max_requests=max_requests,
+                    window_seconds=window_seconds,
+                )
+            )
+            print(f"+ rate limit {agent_name or '*'} / {action_type}: {max_requests} per {window_seconds}s")
 
     await session.commit()
 
