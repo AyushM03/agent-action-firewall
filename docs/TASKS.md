@@ -4,13 +4,13 @@
 - [x] Initialize backend (FastAPI) and frontend (Next.js) projects
 - [x] Configure TypeScript + Tailwind
 - [x] Configure Postgres + Redis (local via Docker Compose is fine to start)
-- [x] Configure Git + GitHub repo (git initialized locally; no GitHub remote yet)
+- [x] Configure Git + GitHub repo
 - [x] Write .env.example for both apps
 
 ## Phase 2: Core Data Model
-- [ ] Design event-sourced schema: agents, action_requests, audit_log, policy_rules
-- [ ] Implement audit_log as append-only (no UPDATE/DELETE at the DB level — enforce with permissions or triggers)
-- [ ] Seed a couple of test agents and policy rules
+- [x] Design event-sourced schema: agents, action_requests, audit_log, policy_rules
+- [x] Implement audit_log as append-only (no UPDATE/DELETE at the DB level — enforce with permissions or triggers)
+- [x] Seed a couple of test agents and policy rules
 
 ## Phase 3: Policy Engine
 - [ ] Define policy rule format (action type → allow/deny/needs_approval + conditions)
