@@ -48,6 +48,7 @@ frontend/src/{app,components,features/{approvals,audit-log,agents},services,type
 - ADR-002: FastAPI backend (not Next.js API routes) — policy/ratelimit/executors need to be a standalone, testable Python service.
 - ADR-003: Redis for rate limiting, Postgres for audit trail — separate stores, don't blur them.
 - ADR-004: Real Gmail API + Stripe test mode as executors — no mocked/fake actions.
+- ADR-005: Policy engine is default-deny and fails closed; precedence is priority, then agent-specific over global, then most restrictive.
 These are locked. If a change seems needed, add a new ADR to DECISIONS.md rather than silently overriding.
 
 ## Design system (see docs/DESIGN.md for full detail)
@@ -59,7 +60,7 @@ Every audit log entry must show: timestamp, agent, action type, decision, reason
 Every policy rule needs one allow-case test and one deny-case test. Rate limit: N succeeds, N+1 denied, resets after window. Audit log: exactly one event per request, immutability verified at DB layer. Run tests after each task, fix failures before moving on.
 
 ## Current status (as of 2026-09-25)
-**Phases 1 (Setup) and 2 (Core Data Model) are done.** Backend and frontend both scaffold, install, and run cleanly.
+**Phases 1 (Setup), 2 (Core Data Model) and 3 (Policy Engine) are done.** Backend and frontend both scaffold, install, and run cleanly.
 - `backend/`: FastAPI app with the `app/{api,policy,ratelimit,executors,events,models,core}` folder structure from ARCHITECTURE.md. `app/core/config.py` (pydantic-settings), `app/core/db.py` (async SQLAlchemy engine/session), `app/core/redis.py` (async redis client), `app/api/health.py` + `app/main.py` (CORS-enabled FastAPI app). Python venv at `backend/.venv`, deps in `backend/requirements.txt`, verified: imports cleanly, connects to Postgres + Redis, `/health` returns `{"status": "ok"}`.
 - `frontend/`: Next.js 16 (App Router, Turbopack) + TypeScript + Tailwind v4, scaffolded via `create-next-app`. Folder structure added: `src/{components,features/{approvals,audit-log,agents},services,types,lib}`. `globals.css` wired with the DESIGN.md status-color palette as Tailwind theme tokens (`bg-surface`, `text-muted`, `text-status-*`, `rounded-card`, etc.), `layout.tsx` uses Inter + JetBrains Mono per DESIGN.md. Verified: lints clean, builds clean, dev server serves `/` with 200.
 - `docker-compose.yml` at repo root runs Postgres 16 + Redis 7 for local dev. Verified healthy and reachable from the backend venv.
@@ -68,7 +69,8 @@ Every policy rule needs one allow-case test and one deny-case test. Rate limit: 
 - **Data model (Phase 2):** `backend/app/models/` — `Agent` (`agents`: name, `allowed_action_types` array), `PolicyRule` (`policy_rules`: `agent_id` NULL = global, `action_type`, `effect` allow/deny/needs_approval, `conditions` JSONB, `priority`), `ActionRequest` (`action_requests`: agent, action_type, payload — no status column, state is derived from events), `AuditEvent` (`audit_log`: bigint identity id, request/agent/action_type, `event_type`, `reason`, `actor`, `data` JSONB, `created_at`). Enums in `app/models/enums.py`; event types: allowed, denied, needs_approval, approved, rejected, executed, execution_failed.
 - **Append-only enforcement:** the initial migration installs `reject_mutation()` triggers that block UPDATE/DELETE/TRUNCATE on `audit_log` and `action_requests`. A partial unique index (`uq_audit_log_one_decision_per_request`) allows only one decision event (allowed/denied/needs_approval) per request; follow-up events (approved/rejected/executed/execution_failed) are unrestricted. Note: the backend still uses the `postgres` superuser, which could disable the triggers — least-privilege role is a Phase 8 task.
 - **Migrations:** Alembic (async template) in `backend/migrations/`; `env.py` reads `settings.database_url`, so `alembic.ini` has no URL. Run from `backend/`: `alembic upgrade head`. `Base.metadata` has a naming convention for constraint names.
-- **Seed:** `python -m app.seed` (idempotent) creates `demo-email-agent`, `demo-payments-agent`, and 3 rules (global send_email→allow, global make_payment→deny, payments-agent make_payment→needs_approval priority 10).
+- **Seed:** `python -m app.seed` (idempotent) creates `demo-email-agent`, `demo-payments-agent`, and 4 rules (global send_email→allow, global make_payment→deny, payments-agent make_payment→needs_approval priority 10, payments-agent make_payment with `amount` lte 5000 → allow priority 20).
+- **Policy engine (Phase 3):** `backend/app/policy/`. `conditions.py`: rule condition format `{"all": [{"field": "amount", "op": "lte", "value": 5000}]}` (`{}` = always matches; `field` is a dotted payload path), ops `eq, neq, lt, lte, gt, gte, in, not_in, email_domain_in, email_domain_not_in`, one function per op, validated by the Pydantic `RuleConditions` model. `engine.py`: pure `evaluate(AgentContext, ActionContext, rules) -> Decision(effect, code, reason, rule_id)`, using frozen snapshots built via `AgentContext.from_model` / `Rule.from_model`, never ORM objects. Precedence (ADR-005): inactive agent or unregistered action type → DENY; then the first matching rule by priority desc, then agent-specific over global, then most restrictive; an unevaluable condition → DENY `policy_error`; no match → DENY `no_matching_rule`. Payment `amount` is an integer in cents. Loading rules from the DB and writing the decision event is not done yet; it belongs to the request endpoint (Phase 4/5).
 - **Tests:** `pytest` from `backend/` (`pytest.ini` sets asyncio auto mode). Tests run against the migrated dev DB inside a rolled-back transaction. Requires `docker compose up -d` first.
 
 ### Dev-machine port quirks (do not "fix" these, they're intentional workarounds)
@@ -77,10 +79,10 @@ This machine already runs **native** Postgres (`postgres.exe`, port 5432) and Re
 - Redis container → host port **6380** (not 6379)
 `backend/app/core/config.py` defaults and `backend/.env.example` / `backend/.env` already point at 5434/6380 — keep them in sync if you ever change `docker-compose.yml`. Also note: local backend dev server was verified on port **8001**, not 8000, because an unrelated container already holds 8000 on this machine — `frontend/.env.example` still defaults `NEXT_PUBLIC_API_BASE_URL` to `http://localhost:8000` since that's the correct default on a clean machine; only override it locally here if 8000 is still occupied when you run the backend.
 
-## Next step: Phase 3 (Policy Engine)
-- Define the rule format: `policy_rules.conditions` JSONB is currently always `{}`; its schema is to be defined here.
-- Implement a pure evaluator in `backend/app/policy/`: (agent, action request, rules) → decision + reason, no DB or network access. Proposed precedence: the matching active rule with the highest priority wins, agent-specific rules beat global ones at equal priority, and no match means deny. Also deny action types that aren't in the agent's `allowed_action_types`.
-- Tests: one allow case and one deny case per rule type.
+## Next step: Phase 4 (Rate Limiting)
+- Redis-backed limiter in `backend/app/ratelimit/`, keyed per (agent_id, action_type), per time window (sliding window or token bucket).
+- Decide where limits are configured and wire the limiter into the decision flow alongside `policy.evaluate`.
+- Tests: N requests succeed, request N+1 is denied with reason `rate_limited`, and the counter resets after the window.
 Full phase breakdown lives in `docs/TASKS.md` (9 phases: Setup → Data Model → Policy Engine → Rate Limiting → Approval Workflow → Executors → Dashboard → Testing/Hardening → Deploy).
 
 Update the "Current status" section above as work progresses — this is what future sessions should trust over re-deriving it from scratch. Also update `docs/MEMORY.md` in parallel since it serves the same purpose for human readers of `docs/`.

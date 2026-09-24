@@ -25,16 +25,25 @@ AGENTS = [
     },
 ]
 
-# (agent name or None for a global rule, action_type, effect, priority, description)
+# (agent name or None for a global rule, action_type, effect, priority, conditions, description)
 RULES = [
-    (None, "send_email", PolicyEffect.ALLOW, 0, "Emails are allowed by default."),
-    (None, "make_payment", PolicyEffect.DENY, 0, "Payments are denied unless a more specific rule applies."),
+    (None, "send_email", PolicyEffect.ALLOW, 0, {}, "Emails are allowed by default."),
+    (None, "make_payment", PolicyEffect.DENY, 0, {}, "Payments are denied unless a more specific rule applies."),
     (
         "demo-payments-agent",
         "make_payment",
         PolicyEffect.NEEDS_APPROVAL,
         10,
+        {},
         "Payments by the payments agent require human approval.",
+    ),
+    (
+        "demo-payments-agent",
+        "make_payment",
+        PolicyEffect.ALLOW,
+        20,
+        {"all": [{"field": "amount", "op": "lte", "value": 5000}]},
+        "Payments of $50.00 or less (amount in cents) are auto-allowed.",
     ),
 ]
 
@@ -50,7 +59,7 @@ async def seed(session: AsyncSession) -> None:
         agents_by_name[spec["name"]] = agent
     await session.flush()
 
-    for agent_name, action_type, effect, priority, description in RULES:
+    for agent_name, action_type, effect, priority, conditions, description in RULES:
         agent_id = agents_by_name[agent_name].id if agent_name else None
         exists = await session.scalar(
             select(PolicyRule.id).where(
@@ -66,6 +75,7 @@ async def seed(session: AsyncSession) -> None:
                     action_type=action_type,
                     effect=effect,
                     priority=priority,
+                    conditions=conditions,
                     description=description,
                 )
             )
