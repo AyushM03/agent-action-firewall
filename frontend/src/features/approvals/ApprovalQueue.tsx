@@ -167,12 +167,23 @@ export function ApprovalQueue() {
           <h2 className="text-sm font-semibold text-muted">Resolved this session</h2>
           <ul className="mt-2 divide-y divide-slate-200 rounded-card border border-slate-200 bg-surface">
             {recent.map((r) => (
-              <li key={r.request_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm">
-                <StatusBadge status={r.event_type} />
-                <span className="min-w-0 flex-1">{r.reason}</span>
-                <time dateTime={r.created_at} className="font-mono text-xs text-muted">
-                  {new Date(r.created_at).toLocaleTimeString()}
-                </time>
+              <li key={r.request_id} className="px-4 py-2 text-sm">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <StatusBadge status={r.event_type} />
+                  <span className="min-w-0 flex-1">{r.reason}</span>
+                  <time dateTime={r.created_at} className="font-mono text-xs text-muted">
+                    {new Date(r.created_at).toLocaleTimeString()}
+                  </time>
+                </div>
+                {r.execution && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 pl-1">
+                    <StatusBadge status={r.execution.status} />
+                    <span className="min-w-0 flex-1 text-muted">{r.execution.reason}</span>
+                    {r.execution.external_id && (
+                      <span className="break-all font-mono text-xs text-muted">{r.execution.external_id}</span>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
