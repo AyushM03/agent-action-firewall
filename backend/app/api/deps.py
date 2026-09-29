@@ -1,5 +1,7 @@
 """Shared route dependencies: DB session, rate limiter, and the two kinds of caller."""
 
+from collections.abc import Mapping
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -7,9 +9,11 @@ from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBea
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.redis import redis_client
 from app.core.security import decode_access_token, hash_api_key
+from app.executors import Executor, build_executors
 from app.models import Agent, Approver
 from app.ratelimit import RateLimiter
 
@@ -21,6 +25,11 @@ bearer = HTTPBearer(auto_error=False, description="Approver JWT from POST /auth/
 
 def get_limiter() -> RateLimiter:
     return RateLimiter(redis_client)
+
+
+@lru_cache
+def get_executors() -> Mapping[str, Executor]:
+    return build_executors(settings)
 
 
 async def get_current_agent(db: DbSession, api_key: Annotated[str | None, Depends(api_key_header)]) -> Agent:
@@ -51,5 +60,6 @@ async def get_current_approver(
 
 
 Limiter = Annotated[RateLimiter, Depends(get_limiter)]
+Executors = Annotated[Mapping[str, Executor], Depends(get_executors)]
 CurrentAgent = Annotated[Agent, Depends(get_current_agent)]
 CurrentApprover = Annotated[Approver, Depends(get_current_approver)]
