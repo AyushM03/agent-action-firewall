@@ -45,8 +45,19 @@ async def events_for(db: AsyncSession, request_id: uuid.UUID) -> list[AuditEvent
     )
 
 
+# Valid payloads; tests override only the fields they care about.
+DEFAULT_PAYLOADS: dict[str, dict[str, Any]] = {
+    "send_email": {"to": "a@example.com", "subject": "Hello", "body": "Test message."},
+    "make_payment": {"amount": 1_000, "currency": "usd"},
+}
+
+
+def payload_for(action_type: str, **overrides: Any) -> dict[str, Any]:
+    return {**DEFAULT_PAYLOADS.get(action_type, {}), **overrides}
+
+
 async def submit(db: AsyncSession, limiter: RateLimiter, agent: Agent, action_type: str, **payload: Any) -> SubmitResult:
-    return await submit_action_request(db, limiter, agent.id, action_type, payload)
+    return await submit_action_request(db, limiter, agent.id, action_type, payload_for(action_type, **payload))
 
 
 async def test_allowed_request_is_recorded_with_one_event(db: AsyncSession, limiter: RateLimiter) -> None:
@@ -58,7 +69,7 @@ async def test_allowed_request_is_recorded_with_one_event(db: AsyncSession, limi
 
     assert result.decision.effect == PolicyEffect.ALLOW
     request = await db.get(ActionRequest, result.request_id)
-    assert request is not None and request.payload == {"to": "a@example.com"}
+    assert request is not None and request.payload == payload_for("send_email")
     [event] = await events_for(db, result.request_id)
     assert event.event_type == AuditEventType.ALLOWED
     assert event.actor == "firewall"
@@ -106,8 +117,8 @@ async def test_rate_limit_also_applies_to_needs_approval(db: AsyncSession, limit
     add_limit(db, agent, "make_payment", max_requests=1)
     await db.flush()
 
-    await submit(db, limiter, agent, "make_payment", amount=1)
-    result = await submit(db, limiter, agent, "make_payment", amount=1)
+    await submit(db, limiter, agent, "make_payment", amount=100)
+    result = await submit(db, limiter, agent, "make_payment", amount=100)
 
     assert result.decision.code == DecisionCode.RATE_LIMITED
 
@@ -184,3 +195,39 @@ async def test_inactive_agent_is_denied_and_recorded(db: AsyncSession, limiter: 
 async def test_unknown_agent_raises(db: AsyncSession, limiter: RateLimiter) -> None:
     with pytest.raises(AgentNotFoundError):
         await submit_action_request(db, limiter, uuid.uuid4(), "send_email", {})
+
+
+async def test_invalid_payload_is_denied_and_recorded(db: AsyncSession, limiter: RateLimiter) -> None:
+    agent = await make_agent(db, "send_email")
+    add_rule(db, agent, "send_email", PolicyEffect.ALLOW)
+    await db.flush()
+
+    result = await submit(db, limiter, agent, "send_email", subject="Hi\r\nBcc: x@evil.com")
+
+    assert result.decision.effect == PolicyEffect.DENY
+    assert result.decision.code == DecisionCode.INVALID_PAYLOAD
+    [event] = await events_for(db, result.request_id)
+    assert event.event_type == AuditEventType.DENIED
+    assert [e["loc"] for e in event.data["errors"]] == ["subject"]
+
+
+async def test_invalid_payloads_do_not_use_rate_limit_budget(db: AsyncSession, limiter: RateLimiter) -> None:
+    agent = await make_agent(db, "make_payment")
+    add_rule(db, agent, "make_payment", PolicyEffect.ALLOW)
+    add_limit(db, agent, "make_payment", max_requests=1)
+    await db.flush()
+
+    for _ in range(3):
+        assert (await submit(db, limiter, agent, "make_payment", amount="lots")).decision.code == DecisionCode.INVALID_PAYLOAD
+    assert (await submit(db, limiter, agent, "make_payment")).decision.effect == PolicyEffect.ALLOW
+
+
+async def test_unknown_action_type_is_denied_and_recorded(db: AsyncSession, limiter: RateLimiter) -> None:
+    agent = await make_agent(db, "delete_database")
+    add_rule(db, agent, "delete_database", PolicyEffect.ALLOW)
+    await db.flush()
+
+    result = await submit(db, limiter, agent, "delete_database")
+
+    assert result.decision.code == DecisionCode.UNKNOWN_ACTION_TYPE
+    assert len(await events_for(db, result.request_id)) == 1

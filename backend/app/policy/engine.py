@@ -32,7 +32,9 @@ class DecisionCode(StrEnum):
     ACTION_NOT_PERMITTED = "action_not_permitted"
     NO_MATCHING_RULE = "no_matching_rule"
     POLICY_ERROR = "policy_error"
-    # Set by the decision flow after policy evaluation, not by `evaluate` itself.
+    # Set by the decision flow around policy evaluation, not by `evaluate` itself.
+    UNKNOWN_ACTION_TYPE = "unknown_action_type"
+    INVALID_PAYLOAD = "invalid_payload"
     RATE_LIMITED = "rate_limited"
     RATE_LIMITER_UNAVAILABLE = "rate_limiter_unavailable"
 

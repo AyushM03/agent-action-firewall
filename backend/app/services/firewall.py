@@ -1,8 +1,10 @@
 """The decision flow for an incoming action request.
 
-    load agent + rules -> policy.evaluate -> rate limiter -> write request + one decision event
+    load agent -> validate payload -> load rules + policy.evaluate -> rate limiter
+      -> write request + one decision event
 
-Policy runs first, so requests it denies don't use up rate-limit budget
+An invalid payload is still recorded (as DENIED), so every request leaves a
+trace. Policy runs before the limiter, so requests it denies don't use up rate-limit budget
 (ADR-006). Everything that can't be checked fails closed (ADR-005).
 """
 
@@ -16,6 +18,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.events.store import append_event
+from app.executors.payloads import InvalidPayloadError, UnknownActionTypeError, parse_payload
 from app.models import ActionRequest, Agent, AuditEventType, PolicyEffect, PolicyRule, RateLimit
 from app.policy import ActionContext, AgentContext, Decision, DecisionCode, Rule, evaluate
 from app.ratelimit import RateLimiter, select_limits
@@ -110,10 +113,24 @@ async def submit_action_request(
         raise AgentNotFoundError(str(agent_id))
 
     action = ActionContext(action_type, payload)
-    decision = await decide_policy(session, agent, action)
     extra: dict[str, Any] = {}
-    if decision.effect != PolicyEffect.DENY:
-        decision, extra = await apply_rate_limit(session, limiter, agent, action, decision)
+    try:
+        parse_payload(action_type, payload)
+    except UnknownActionTypeError:
+        decision = Decision(
+            PolicyEffect.DENY, DecisionCode.UNKNOWN_ACTION_TYPE, f"'{action_type}' is not a supported action type."
+        )
+    except InvalidPayloadError as exc:
+        decision = Decision(
+            PolicyEffect.DENY,
+            DecisionCode.INVALID_PAYLOAD,
+            f"Invalid '{action_type}' payload: {exc.errors[0]['loc'] or 'payload'}: {exc.errors[0]['msg']}.",
+        )
+        extra = {"errors": exc.errors}
+    else:
+        decision = await decide_policy(session, agent, action)
+        if decision.effect != PolicyEffect.DENY:
+            decision, extra = await apply_rate_limit(session, limiter, agent, action, decision)
 
     request = ActionRequest(agent_id=agent.id, action_type=action_type, payload=payload)
     session.add(request)

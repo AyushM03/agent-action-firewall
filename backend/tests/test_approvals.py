@@ -15,7 +15,7 @@ from app.services.approvals import (
     list_pending,
     resolve,
 )
-from tests.test_firewall_flow import add_rule, make_agent, submit
+from tests.test_firewall_flow import add_rule, make_agent, payload_for, submit
 
 
 async def pending_request(db: AsyncSession, limiter: RateLimiter) -> uuid.UUID:
@@ -40,7 +40,7 @@ async def test_needs_approval_request_appears_in_queue(db: AsyncSession, limiter
     request_id = await pending_request(db, limiter)
 
     [item] = [item for item in await list_pending(db) if item.request.id == request_id]
-    assert item.request.payload == {"amount": 10_000}
+    assert item.request.payload == payload_for("make_payment", amount=10_000)
     assert item.agent_name.startswith("test-agent-")
     assert item.decision.event_type == AuditEventType.NEEDS_APPROVAL
 
@@ -51,7 +51,7 @@ async def test_allowed_and_denied_requests_are_not_queued(db: AsyncSession, limi
     add_rule(db, agent, "make_payment", PolicyEffect.DENY)
     await db.flush()
     allowed = await submit(db, limiter, agent, "send_email", to="a@example.com")
-    denied = await submit(db, limiter, agent, "make_payment", amount=1)
+    denied = await submit(db, limiter, agent, "make_payment", amount=100)
 
     assert not {allowed.request_id, denied.request_id} & await pending_ids(db)
 
@@ -106,7 +106,7 @@ async def test_denied_request_cannot_be_approved(db: AsyncSession, limiter: Rate
     agent = await make_agent(db, "make_payment")
     add_rule(db, agent, "make_payment", PolicyEffect.DENY)
     await db.flush()
-    result = await submit(db, limiter, agent, "make_payment", amount=1)
+    result = await submit(db, limiter, agent, "make_payment", amount=100)
 
     with pytest.raises(NotAwaitingApprovalError):
         await resolve(db, result.request_id, "alice", approve=True)
