@@ -29,9 +29,11 @@
 - [x] Test the full flow: request → needs_approval → human decision → blocked (the "executed" leg lands with the executors in Phase 6)
 
 ## Phase 6: Action Executors
-- [ ] Gmail executor: OAuth setup, send-email function, wire to "allowed" action outcome
-- [ ] Stripe (test mode) executor: create a test payment/charge, wire to "allowed" outcome
-- [ ] Both executors write a result event (success/failure) to the audit log
+- [x] Gmail executor: OAuth setup (`python -m app.manage gmail-auth`), send-email function, wired to "allowed"/"approved" outcomes
+- [x] Stripe (test mode) executor: confirmed test PaymentIntent, wired to "allowed"/"approved" outcomes
+- [x] Both executors write a result event (executed/execution_failed) to the audit log
+- [x] Per-action-type payload validation (ADR-008)
+- [ ] Live verification with real credentials: `pytest -m integration` (needs GMAIL_* and STRIPE_SECRET_KEY in backend/.env)
 
 ## Phase 7: Dashboard
 - [ ] Agent activity view
