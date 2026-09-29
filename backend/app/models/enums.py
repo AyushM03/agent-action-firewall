@@ -28,3 +28,6 @@ DECISION_EVENT_TYPES = frozenset(
 def sql_in_list(enum_cls: type[StrEnum]) -> str:
     """Render an enum's values as a SQL IN list for CHECK constraints."""
     return ", ".join(f"'{member.value}'" for member in enum_cls)
+
+# Human resolution of a NEEDS_APPROVAL request — at most one per request.
+RESOLUTION_EVENT_TYPES = frozenset({AuditEventType.APPROVED, AuditEventType.REJECTED})

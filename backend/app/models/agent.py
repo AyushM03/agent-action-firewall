@@ -24,4 +24,6 @@ class Agent(Base):
         ARRAY(String(100)), default=list, server_default="{}"
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # SHA-256 of the agent's API key (app.core.security). NULL = no key issued, can't call the API.
+    api_key_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
