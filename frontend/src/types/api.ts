@@ -20,10 +20,19 @@ export type PendingApproval = {
   requested_at: string;
 };
 
+export type Execution = {
+  status: "executed" | "execution_failed";
+  reason: string;
+  external_id: string | null;
+  code: string | null;
+};
+
 export type Resolution = {
   request_id: string;
   event_type: "approved" | "rejected";
   reason: string;
   actor: string;
   created_at: string;
+  // Set when approved: the result of running the action (Gmail send / Stripe payment).
+  execution: Execution | null;
 };

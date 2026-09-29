@@ -1,4 +1,12 @@
-export type Status = "allowed" | "denied" | "needs_approval" | "pending" | "approved" | "rejected";
+export type Status =
+  | "allowed"
+  | "denied"
+  | "needs_approval"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "executed"
+  | "execution_failed";
 
 const STYLES: Record<Status, { label: string; className: string }> = {
   allowed: { label: "Allowed", className: "bg-status-allowed/10 text-status-allowed ring-status-allowed/30" },
@@ -10,6 +18,9 @@ const STYLES: Record<Status, { label: string; className: string }> = {
     className: "bg-status-needs-approval/10 text-status-needs-approval ring-status-needs-approval/30",
   },
   pending: { label: "Pending", className: "bg-status-pending/10 text-status-pending ring-status-pending/30" },
+  executed: { label: "Executed", className: "bg-status-allowed text-white ring-status-allowed" },
+  // Solid, not tinted: a failed execution must look different from a policy denial (DESIGN.md).
+  execution_failed: { label: "Execution failed", className: "bg-status-denied text-white ring-status-denied" },
 };
 
 export function StatusBadge({ status }: { status: Status }) {
