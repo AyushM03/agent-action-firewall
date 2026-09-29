@@ -97,6 +97,19 @@ async def test_only_one_decision_event_per_request(db: AsyncSession) -> None:
             await db.flush()
 
 
+@pytest.mark.parametrize("second", [AuditEventType.APPROVED, AuditEventType.REJECTED])
+async def test_only_one_resolution_event_per_request(db: AsyncSession, second: AuditEventType) -> None:
+    request = await make_request(db)
+    db.add(event_for(request, AuditEventType.NEEDS_APPROVAL))
+    db.add(event_for(request, AuditEventType.APPROVED))
+    await db.flush()
+
+    with pytest.raises(IntegrityError, match="uq_audit_log_one_resolution_per_request"):
+        async with db.begin_nested():
+            db.add(event_for(request, second))
+            await db.flush()
+
+
 async def test_follow_up_events_are_allowed_after_decision(db: AsyncSession) -> None:
     request = await make_request(db)
     for event_type in (AuditEventType.NEEDS_APPROVAL, AuditEventType.APPROVED, AuditEventType.EXECUTED):

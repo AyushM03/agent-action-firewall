@@ -18,7 +18,11 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
-from app.models.enums import DECISION_EVENT_TYPES, AuditEventType, sql_in_list
+from app.models.enums import DECISION_EVENT_TYPES, RESOLUTION_EVENT_TYPES, AuditEventType, sql_in_list
+
+
+def event_type_in(event_types: frozenset[AuditEventType]):
+    return text("event_type IN ({})".format(", ".join(f"'{e.value}'" for e in sorted(event_types))))
 
 
 class AuditEvent(Base):
@@ -37,9 +41,14 @@ class AuditEvent(Base):
             "uq_audit_log_one_decision_per_request",
             "action_request_id",
             unique=True,
-            postgresql_where=text(
-                "event_type IN ({})".format(", ".join(f"'{e.value}'" for e in sorted(DECISION_EVENT_TYPES)))
-            ),
+            postgresql_where=event_type_in(DECISION_EVENT_TYPES),
+        ),
+        # ...and at most one human approve/reject, even if two approvers race (ADR-007).
+        Index(
+            "uq_audit_log_one_resolution_per_request",
+            "action_request_id",
+            unique=True,
+            postgresql_where=event_type_in(RESOLUTION_EVENT_TYPES),
         ),
         Index("ix_audit_log_agent_created", "agent_id", "created_at"),
     )
