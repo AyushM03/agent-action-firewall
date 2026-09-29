@@ -50,8 +50,8 @@ frontend/src/{app,components,features/{approvals,audit-log,agents},services,type
 - ADR-004: Real Gmail API + Stripe test mode as executors — no mocked/fake actions.
 - ADR-005: Policy engine is default-deny and fails closed; precedence is priority, then agent-specific over global, then most restrictive.
 - ADR-006: Rate limits are configured in Postgres and counted in Redis (atomic sliding window); policy runs first, and only non-denied requests are counted; Redis down means DENY.
-- ADR-008: Actions execute inline right after `allowed` or `approved`, via `services/execution.py::execute_request` only (it re-checks the audit log); at most one executed/execution_failed event per request (unique index), no automatic retries; payloads are validated against strict per-type schemas before policy (invalid → DENIED `invalid_payload`); Stripe refuses non-test keys.
 - ADR-007: Agents authenticate with a per-agent API key (`X-API-Key`, stored as SHA-256); approvers log in for a JWT (bcrypt passwords, re-checked against the DB each call); the approval queue is derived from audit_log; a partial unique index allows only one approved/rejected event per request.
+- ADR-008: Actions execute inline right after `allowed` or `approved`, via `services/execution.py::execute_request` only (it re-checks the audit log); at most one executed/execution_failed event per request (unique index), no automatic retries; payloads are validated against strict per-type schemas before policy (invalid → DENIED `invalid_payload`); Stripe refuses non-test keys.
 These are locked. If a change seems needed, add a new ADR to DECISIONS.md rather than silently overriding.
 
 ## Design system (see docs/DESIGN.md for full detail)
