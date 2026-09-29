@@ -31,3 +31,6 @@ def sql_in_list(enum_cls: type[StrEnum]) -> str:
 
 # Human resolution of a NEEDS_APPROVAL request — at most one per request.
 RESOLUTION_EVENT_TYPES = frozenset({AuditEventType.APPROVED, AuditEventType.REJECTED})
+
+# Executor outcome — at most one per request, so an action is never recorded as run twice.
+RESULT_EVENT_TYPES = frozenset({AuditEventType.EXECUTED, AuditEventType.EXECUTION_FAILED})
