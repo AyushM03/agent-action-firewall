@@ -23,10 +23,10 @@
 - [x] Test: exceeding the limit produces a DENY with a clear reason
 
 ## Phase 5: Approval Workflow
-- [ ] Build approval queue table + API endpoints (list pending, approve, reject)
-- [ ] Build approval dashboard UI
-- [ ] Ensure every approve/reject writes an audit event
-- [ ] Test the full flow: request → needs_approval → human decision → executed or blocked
+- [x] Build approval queue + API endpoints (list pending, approve, reject) — queue is derived from audit_log, no table (ADR-007)
+- [x] Build approval dashboard UI
+- [x] Ensure every approve/reject writes an audit event
+- [x] Test the full flow: request → needs_approval → human decision → blocked (the "executed" leg lands with the executors in Phase 6)
 
 ## Phase 6: Action Executors
 - [ ] Gmail executor: OAuth setup, send-email function, wire to "allowed" action outcome
