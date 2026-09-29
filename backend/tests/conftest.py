@@ -2,11 +2,15 @@ import uuid
 from collections.abc import AsyncGenerator
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.api.deps import get_limiter
 from app.core.config import settings
+from app.core.db import get_db
+from app.main import app
 from app.ratelimit import RateLimiter
 
 
@@ -63,3 +67,15 @@ async def limiter(redis: Redis, clock: FakeClock) -> AsyncGenerator[RateLimiter,
     keys = [key async for key in redis.scan_iter(f"{prefix}:*")]
     if keys:
         await redis.delete(*keys)
+
+
+@pytest.fixture
+async def client(db: AsyncSession, limiter: RateLimiter) -> AsyncGenerator[AsyncClient, None]:
+    """HTTP client for the real app, wired to the rolled-back test session and test limiter."""
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_limiter] = lambda: limiter
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+            yield http
+    finally:
+        app.dependency_overrides.clear()
