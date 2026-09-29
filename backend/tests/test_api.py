@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import create_access_token, generate_api_key, hash_api_key
 from app.models import Agent, AuditEvent, PolicyEffect
 from app.services.accounts import create_approver
-from tests.test_firewall_flow import add_rule, make_agent
+from tests.conftest import FakeExecutor
+from tests.test_firewall_flow import add_rule, make_agent, payload_for
 
 PASSWORD = "correct horse battery"
 
@@ -43,14 +44,14 @@ async def event_types(db: AsyncSession, request_id: str) -> list[str]:
 
 
 async def test_request_without_api_key_is_401(client: AsyncClient) -> None:
-    response = await client.post("/actions/request", json={"action_type": "send_email", "payload": {}})
+    response = await client.post("/actions/request", json={"action_type": "send_email", "payload": payload_for("send_email")})
     assert response.status_code == 401
 
 
 async def test_request_with_unknown_api_key_is_401(client: AsyncClient) -> None:
     response = await client.post(
         "/actions/request",
-        json={"action_type": "send_email", "payload": {}},
+        json={"action_type": "send_email", "payload": payload_for("send_email")},
         headers={"X-API-Key": generate_api_key()},
     )
     assert response.status_code == 401
@@ -62,15 +63,17 @@ async def test_request_is_decided_and_recorded_for_the_keyed_agent(db: AsyncSess
     await db.flush()
 
     response = await client.post(
-        "/actions/request", json={"action_type": "send_email", "payload": {"to": "a@example.com"}}, headers=headers
+        "/actions/request", json={"action_type": "send_email", "payload": payload_for("send_email")}, headers=headers
     )
 
     assert response.status_code == 201
     body = response.json()
     assert body["decision"] == "allow"
     assert body["code"] == "rule_matched"
-    [event] = (await db.scalars(select(AuditEvent).where(AuditEvent.action_request_id == uuid.UUID(body["request_id"])))).all()
-    assert event.agent_id == agent.id
+    assert body["execution"]["status"] == "executed"
+    events = (await db.scalars(select(AuditEvent).where(AuditEvent.action_request_id == uuid.UUID(body["request_id"])))).all()
+    assert [e.event_type for e in events] == ["allowed", "executed"]
+    assert all(e.agent_id == agent.id for e in events)
 
 
 async def test_agent_id_in_body_cannot_impersonate_another_agent(db: AsyncSession, client: AsyncClient) -> None:
@@ -81,7 +84,7 @@ async def test_agent_id_in_body_cannot_impersonate_another_agent(db: AsyncSessio
 
     response = await client.post(
         "/actions/request",
-        json={"agent_id": str(victim.id), "action_type": "make_payment", "payload": {"amount": 1}},
+        json={"agent_id": str(victim.id), "action_type": "make_payment", "payload": payload_for("make_payment", amount=100)},
         headers=headers,
     )
 
@@ -152,7 +155,7 @@ async def test_unauthenticated_approve_writes_no_event(db: AsyncSession, client:
     agent, headers = await agent_with_key(db, "make_payment")
     add_rule(db, agent, "make_payment", PolicyEffect.NEEDS_APPROVAL)
     await db.flush()
-    request_id = (await client.post("/actions/request", json={"action_type": "make_payment", "payload": {"amount": 1}}, headers=headers)).json()["request_id"]
+    request_id = (await client.post("/actions/request", json={"action_type": "make_payment", "payload": payload_for("make_payment", amount=100)}, headers=headers)).json()["request_id"]
 
     assert (await client.post(f"/approvals/{request_id}/approve")).status_code == 401
     assert await event_types(db, request_id) == ["needs_approval"]
@@ -167,25 +170,27 @@ async def test_approve_allowed_request_is_409(db: AsyncSession, client: AsyncCli
     agent, agent_headers = await agent_with_key(db, "send_email")
     add_rule(db, agent, "send_email", PolicyEffect.ALLOW)
     await db.flush()
-    request_id = (await client.post("/actions/request", json={"action_type": "send_email", "payload": {}}, headers=agent_headers)).json()["request_id"]
+    request_id = (await client.post("/actions/request", json={"action_type": "send_email", "payload": payload_for("send_email")}, headers=agent_headers)).json()["request_id"]
     headers = await approver_headers(db, client)
 
     response = await client.post(f"/approvals/{request_id}/approve", headers=headers)
 
     assert response.status_code == 409
-    assert await event_types(db, request_id) == ["allowed"]
+    assert await event_types(db, request_id) == ["allowed", "executed"]
 
 
 # --- Full flow: request -> needs_approval -> human decision ---
 
 
-async def test_full_flow_request_needs_approval_then_approved(db: AsyncSession, client: AsyncClient) -> None:
+async def test_full_flow_request_needs_approval_then_approved(
+    db: AsyncSession, client: AsyncClient, executors: dict[str, FakeExecutor]
+) -> None:
     agent, agent_headers = await agent_with_key(db, "make_payment")
     add_rule(db, agent, "make_payment", PolicyEffect.NEEDS_APPROVAL)
     await db.flush()
     headers = await approver_headers(db, client)
 
-    decision = (await client.post("/actions/request", json={"action_type": "make_payment", "payload": {"amount": 12_500}}, headers=agent_headers)).json()
+    decision = (await client.post("/actions/request", json={"action_type": "make_payment", "payload": payload_for("make_payment", amount=12_500)}, headers=agent_headers)).json()
     assert decision["decision"] == "needs_approval"
     request_id = decision["request_id"]
 
@@ -193,31 +198,41 @@ async def test_full_flow_request_needs_approval_then_approved(db: AsyncSession, 
     [item] = [item for item in pending if item["request_id"] == request_id]
     assert item["agent_name"] == agent.name
     assert item["action_type"] == "make_payment"
-    assert item["payload"] == {"amount": 12_500}
+    assert item["payload"] == payload_for("make_payment", amount=12_500)
 
     response = await client.post(f"/approvals/{request_id}/approve", headers=headers, json={"note": "Invoice checked"})
     assert response.status_code == 200
     assert response.json()["event_type"] == "approved"
     assert response.json()["actor"].startswith("approver:approver-")
+    assert response.json()["execution"] == {
+        "status": "executed", "reason": "Executed by executor:fake-stripe: fake-1.", "external_id": "fake-1", "code": None
+    }
+    [(executed_id, payload)] = executors["make_payment"].calls
+    assert str(executed_id) == request_id and payload.amount == 12_500
 
     pending = (await client.get("/approvals/pending", headers=headers)).json()
     assert request_id not in {item["request_id"] for item in pending}
-    assert await event_types(db, request_id) == ["needs_approval", "approved"]
+    assert await event_types(db, request_id) == ["needs_approval", "approved", "executed"]
 
     again = await client.post(f"/approvals/{request_id}/reject", headers=headers)
     assert again.status_code == 409
-    assert await event_types(db, request_id) == ["needs_approval", "approved"]
+    assert await event_types(db, request_id) == ["needs_approval", "approved", "executed"]
+    assert len(executors["make_payment"].calls) == 1
 
 
-async def test_full_flow_request_needs_approval_then_rejected(db: AsyncSession, client: AsyncClient) -> None:
+async def test_full_flow_request_needs_approval_then_rejected(
+    db: AsyncSession, client: AsyncClient, executors: dict[str, FakeExecutor]
+) -> None:
     agent, agent_headers = await agent_with_key(db, "make_payment")
     add_rule(db, agent, "make_payment", PolicyEffect.NEEDS_APPROVAL)
     await db.flush()
     headers = await approver_headers(db, client)
-    request_id = (await client.post("/actions/request", json={"action_type": "make_payment", "payload": {"amount": 99_999}}, headers=agent_headers)).json()["request_id"]
+    request_id = (await client.post("/actions/request", json={"action_type": "make_payment", "payload": payload_for("make_payment", amount=99_999)}, headers=agent_headers)).json()["request_id"]
 
     response = await client.post(f"/approvals/{request_id}/reject", headers=headers)
 
     assert response.status_code == 200
     assert response.json()["event_type"] == "rejected"
+    assert response.json()["execution"] is None
     assert await event_types(db, request_id) == ["needs_approval", "rejected"]
+    assert executors["make_payment"].calls == []

@@ -5,10 +5,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import CurrentApprover, DbSession
+from app.api.deps import CurrentApprover, DbSession, Executors
+from app.api.schemas import ExecutionOut
 from app.models import Approver
 from app.services import approvals
 from app.services.approvals import AlreadyResolvedError, NotAwaitingApprovalError, RequestNotFoundError
+from app.services.execution import resolve_and_execute
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 
@@ -33,6 +35,8 @@ class ResolutionOut(BaseModel):
     reason: str
     actor: str
     created_at: datetime
+    # Present only when approved: what happened when the action ran.
+    execution: ExecutionOut | None = None
 
 
 @router.get("/pending")
@@ -52,10 +56,17 @@ async def list_pending(db: DbSession, _: CurrentApprover) -> list[PendingApprova
 
 
 async def resolve(
-    db: DbSession, approver: Approver, request_id: uuid.UUID, approve: bool, body: ResolveIn | None
+    db: DbSession,
+    executors: Executors,
+    approver: Approver,
+    request_id: uuid.UUID,
+    approve: bool,
+    body: ResolveIn | None,
 ) -> ResolutionOut:
     try:
-        event = await approvals.resolve(db, request_id, approver.username, approve, body.note if body else None)
+        event, execution = await resolve_and_execute(
+            db, executors, request_id, approver.username, approve, body.note if body else None
+        )
     except RequestNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Action request not found.")
     except NotAwaitingApprovalError:
@@ -69,18 +80,28 @@ async def resolve(
         reason=event.reason,
         actor=event.actor,
         created_at=event.created_at,
+        execution=ExecutionOut.from_event(execution),
     )
 
 
 @router.post("/{request_id}/approve")
 async def approve(
-    request_id: uuid.UUID, db: DbSession, approver: CurrentApprover, body: ResolveIn | None = None
+    request_id: uuid.UUID,
+    db: DbSession,
+    executors: Executors,
+    approver: CurrentApprover,
+    body: ResolveIn | None = None,
 ) -> ResolutionOut:
-    return await resolve(db, approver, request_id, True, body)
+    """Approve a pending request and execute it immediately."""
+    return await resolve(db, executors, approver, request_id, True, body)
 
 
 @router.post("/{request_id}/reject")
 async def reject(
-    request_id: uuid.UUID, db: DbSession, approver: CurrentApprover, body: ResolveIn | None = None
+    request_id: uuid.UUID,
+    db: DbSession,
+    executors: Executors,
+    approver: CurrentApprover,
+    body: ResolveIn | None = None,
 ) -> ResolutionOut:
-    return await resolve(db, approver, request_id, False, body)
+    return await resolve(db, executors, approver, request_id, False, body)

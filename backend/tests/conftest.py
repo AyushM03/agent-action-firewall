@@ -7,9 +7,11 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.api.deps import get_limiter
+from app.api.deps import get_executors, get_limiter
 from app.core.config import settings
 from app.core.db import get_db
+from app.executors import ExecutionError, ExecutionResult
+from app.executors.payloads import Payload
 from app.main import app
 from app.ratelimit import RateLimiter
 
@@ -69,11 +71,34 @@ async def limiter(redis: Redis, clock: FakeClock) -> AsyncGenerator[RateLimiter,
         await redis.delete(*keys)
 
 
+class FakeExecutor:
+    """Stands in for Gmail/Stripe in tests that aren't about the integrations themselves."""
+
+    def __init__(self, name: str) -> None:
+        self.actor = f"executor:fake-{name}"
+        self.calls: list[tuple[uuid.UUID, Payload]] = []
+        self.error: ExecutionError | None = None
+
+    async def execute(self, request_id: uuid.UUID, payload: Payload) -> ExecutionResult:
+        self.calls.append((request_id, payload))
+        if self.error:
+            raise self.error
+        return ExecutionResult(f"fake-{len(self.calls)}", {"fake": True})
+
+
 @pytest.fixture
-async def client(db: AsyncSession, limiter: RateLimiter) -> AsyncGenerator[AsyncClient, None]:
-    """HTTP client for the real app, wired to the rolled-back test session and test limiter."""
+def executors() -> dict[str, FakeExecutor]:
+    return {"send_email": FakeExecutor("gmail"), "make_payment": FakeExecutor("stripe")}
+
+
+@pytest.fixture
+async def client(
+    db: AsyncSession, limiter: RateLimiter, executors: dict[str, FakeExecutor]
+) -> AsyncGenerator[AsyncClient, None]:
+    """HTTP client for the real app, wired to the rolled-back test session, limiter and fake executors."""
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_limiter] = lambda: limiter
+    app.dependency_overrides[get_executors] = lambda: executors
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
             yield http
