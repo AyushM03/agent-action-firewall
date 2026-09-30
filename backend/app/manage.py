@@ -4,6 +4,7 @@ Usage (from backend/):
     python -m app.manage create-approver <username>     # prompts for a password
     python -m app.manage issue-agent-key <agent-name>   # prints the new key once
     python -m app.manage gmail-auth                     # one-time OAuth consent, prints GMAIL_REFRESH_TOKEN
+    python -m app.manage check-credentials              # which executor credentials are set (values never printed)
 """
 
 import argparse
@@ -14,6 +15,7 @@ import sys
 from app.core.config import settings
 from app.core.db import async_session, engine
 from app.executors.gmail import GMAIL_SEND_SCOPE
+from app.executors.payments import TEST_KEY_PREFIXES
 from app.services.accounts import AccountError, create_approver, issue_agent_key
 
 
@@ -62,15 +64,42 @@ def gmail_auth() -> None:
     print(f"GMAIL_REFRESH_TOKEN={credentials.refresh_token}")
 
 
+def check_credentials() -> None:
+    """Report which executor credentials backend/.env provides, without printing their values."""
+    gmail = {
+        "GMAIL_CLIENT_ID": settings.gmail_client_id,
+        "GMAIL_CLIENT_SECRET": settings.gmail_client_secret,
+        "GMAIL_REFRESH_TOKEN": settings.gmail_refresh_token,
+        "GMAIL_SENDER_ADDRESS": settings.gmail_sender_address,
+    }
+    for name, value in gmail.items():
+        print(f"{name:<22} {'set' if value else 'missing'}")
+
+    stripe_key = settings.stripe_secret_key
+    if not stripe_key:
+        stripe_status = "missing"
+    elif stripe_key.startswith(TEST_KEY_PREFIXES):
+        stripe_status = "set (test mode)"
+    else:
+        stripe_status = "NOT A TEST KEY - the executor will refuse it"
+    print(f"{'STRIPE_SECRET_KEY':<22} {stripe_status}")
+
+    ready = all(gmail.values()) and stripe_key.startswith(TEST_KEY_PREFIXES)
+    print("\nReady for `pytest -m integration`." if ready else "\nSome integration tests will be skipped.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m app.manage")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("create-approver").add_argument("username")
     commands.add_parser("issue-agent-key").add_argument("agent_name")
     commands.add_parser("gmail-auth")
+    commands.add_parser("check-credentials")
     args = parser.parse_args()
     if args.command == "gmail-auth":
         gmail_auth()
+    elif args.command == "check-credentials":
+        check_credentials()
     else:
         asyncio.run(run(args))
 
