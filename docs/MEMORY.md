@@ -1,7 +1,7 @@
 # Project Memory
 
 ## Current Status
-Phase 6 (Action Executors) is code-complete. Allowed requests run immediately, and approved ones run as soon as they're approved, through the Gmail executor (send_email) or the Stripe test-mode executor (make_payment). The outcome is appended as `executed` or `execution_failed`. Payloads are validated per action type before policy runs. A live run against real Gmail/Stripe credentials (`pytest -m integration`) is still to be done.
+Phase 6 (Action Executors) is code-complete. Allowed requests run immediately, and approved ones run as soon as they're approved, through the Gmail executor (send_email) or the Stripe test-mode executor (make_payment). The outcome is appended as `executed` or `execution_failed`. Payloads are validated per action type before policy runs. Verified live on 2026-10-01: `pytest -m integration` sent a real Gmail message and created a Stripe test PaymentIntent (2 passed).
 
 ## Completed
 - PRD, Architecture, Design, Rules, Tasks, Decisions defined
@@ -18,13 +18,13 @@ Phase 6 (Action Executors) is code-complete. Allowed requests run immediately, a
 - Phase 6 (ADR-008): payload schemas in `backend/app/executors/payloads.py`; `gmail.py` and `payments.py` executors; `backend/app/services/execution.py` is the only path to an executor and re-checks the audit log first; a unique index allows one result event per request. `python -m app.manage gmail-auth` prints a Gmail refresh token. Dashboard shows the execution result after approving. Tests: `test_payloads.py`, `test_executors.py`, `test_execution.py`, and opt-in `test_integrations.py` (159 passing)
 
 ## Current Task
-Phase 6: live verification with real credentials, then Phase 7: Dashboard (see TASKS.md).
+Phase 7: Dashboard (see TASKS.md).
 
 ## Known Issues
 - This dev machine has native Postgres/Redis Windows services already on the standard ports (5432/6379), plus an unrelated Docker project on 5433/8000. Project's `docker-compose.yml` uses 5434 (Postgres) and 6380 (Redis) instead — already reflected in `backend/.env.example` and `backend/app/core/config.py` defaults. See CLAUDE.md "Dev-machine port quirks" for the full explanation — don't change these back to the standard ports on this machine.
 - The backend still connects as the `postgres` superuser, which could disable the append-only triggers. A least-privilege app role is part of the Phase 8 security pass.
 
 ## Next Step
-Add Gmail OAuth and Stripe test credentials to `backend/.env` and run `pytest -m integration`. Then Phase 7: audit log and agent read endpoints, plus the audit log viewer and agent activity views.
+Phase 7: audit log and agent read endpoints, plus the audit log viewer and agent activity views.
 
 Update this file as work progresses — it should always reflect where the project actually is, not where the docs originally planned for it to be.
