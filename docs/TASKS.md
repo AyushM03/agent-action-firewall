@@ -33,7 +33,7 @@
 - [x] Stripe (test mode) executor: confirmed test PaymentIntent, wired to "allowed"/"approved" outcomes
 - [x] Both executors write a result event (executed/execution_failed) to the audit log
 - [x] Per-action-type payload validation (ADR-008)
-- [ ] Live verification with real credentials: `pytest -m integration` (needs GMAIL_* and STRIPE_SECRET_KEY in backend/.env)
+- [x] Live verification with real credentials: `pytest -m integration` passed 2026-10-01 (real Gmail send + Stripe test PaymentIntent)
 
 ## Phase 7: Dashboard
 - [ ] Agent activity view
