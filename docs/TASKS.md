@@ -43,10 +43,10 @@
 - [x] Verified in a real browser against the live backend (desktop + 390px mobile) on 2026-10-02
 
 ## Phase 8: Testing & Hardening
-- [ ] End-to-end test: agent requests risky action → approval → real Gmail send
-- [ ] End-to-end test: agent exceeds rate limit → denied
-- [ ] Security pass against SECURITY.md
-- [ ] Review against ARCHITECTURE.md and RULES.md
+- [x] End-to-end test: agent requests risky action → approval → real Gmail send (`tests/test_e2e.py`, live run passed 2026-10-02, plus the same flow for a Stripe test payment)
+- [x] End-to-end test: agent exceeds rate limit → denied
+- [x] Security pass against SECURITY.md: least-privilege DB role + startup guard (ADR-009), approver login throttling, SQL parameters never logged, tighter CORS; git history checked clean of secrets
+- [x] Review against ARCHITECTURE.md and RULES.md: no violations found (route auth, executor isolation, pure policy, frontend only calls the backend)
 
 ## Phase 9: Deploy
 - [ ] Deploy frontend to Vercel
