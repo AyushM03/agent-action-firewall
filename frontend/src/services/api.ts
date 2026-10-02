@@ -1,4 +1,13 @@
-import type { Approver, PendingApproval, Resolution, TokenResponse } from "@/types/api";
+import type {
+  AgentActivity,
+  Approver,
+  AuditFilters,
+  AuditPage,
+  PendingApproval,
+  RequestHistory,
+  Resolution,
+  TokenResponse,
+} from "@/types/api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
@@ -63,4 +72,25 @@ export function resolveApproval(
     token,
     body: JSON.stringify({ note: note?.trim() || null }),
   });
+}
+
+export function listAuditEvents(
+  token: string,
+  filters: AuditFilters,
+  page: { before?: number; limit?: number } = {},
+): Promise<AuditPage> {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries({ ...filters, ...page })) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  const query = params.toString();
+  return request(`/audit/events${query ? `?${query}` : ""}`, { token });
+}
+
+export function getRequestHistory(token: string, requestId: string): Promise<RequestHistory> {
+  return request(`/audit/requests/${encodeURIComponent(requestId)}`, { token });
+}
+
+export function listAgents(token: string): Promise<AgentActivity[]> {
+  return request("/agents", { token });
 }
