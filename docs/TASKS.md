@@ -36,10 +36,11 @@
 - [x] Live verification with real credentials: `pytest -m integration` passed 2026-10-01 (real Gmail send + Stripe test PaymentIntent)
 
 ## Phase 7: Dashboard
-- [ ] Agent activity view
-- [ ] Pending approvals view
-- [ ] Full audit log viewer (filter by agent/action/decision)
-- [ ] Loading / empty / error states throughout
+- [x] Agent activity view (`/agents`, backed by `GET /agents`)
+- [x] Pending approvals view (`/approvals`, now inside the shared dashboard shell)
+- [x] Full audit log viewer (`/audit`, backed by `GET /audit/events` + `GET /audit/requests/{id}`; filter by agent/action/event type)
+- [x] Loading / empty / error states throughout
+- [x] Verified in a real browser against the live backend (desktop + 390px mobile) on 2026-10-02
 
 ## Phase 8: Testing & Hardening
 - [ ] End-to-end test: agent requests risky action → approval → real Gmail send
