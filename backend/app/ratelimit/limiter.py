@@ -78,20 +78,21 @@ class RateLimiter:
         self._clock = clock
         self._script = redis.register_script(SLIDING_WINDOW_LUA)
 
-    def _key(self, agent_id: uuid.UUID, action_type: str, limit: Limit) -> str:
-        return f"{self._prefix}:{agent_id}:{action_type}:{limit.window_seconds}"
-
     async def hit(
         self, agent_id: uuid.UUID, action_type: str, limits: Sequence[Limit]
     ) -> RateLimitResult:
-        """Count one request against every limit, or none if any limit is full.
+        """Count one agent request against every limit, or none if any limit is full.
 
         Raises redis.RedisError if Redis is unreachable; callers must fail closed.
         """
+        return await self.hit_subject(f"{agent_id}:{action_type}", limits)
+
+    async def hit_subject(self, subject: str, limits: Sequence[Limit]) -> RateLimitResult:
+        """Like `hit`, for anything else that needs limiting (e.g. `login-user:<name>`)."""
         if not limits:
             return RateLimitResult(allowed=True)
 
-        keys = [self._key(agent_id, action_type, limit) for limit in limits]
+        keys = [f"{self._prefix}:{subject}:{limit.window_seconds}" for limit in limits]
         args: list[int | str] = [int(self._clock() * 1000), uuid.uuid4().hex]
         for limit in limits:
             args += [limit.window_seconds * 1000, limit.max_requests]
