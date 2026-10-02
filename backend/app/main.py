@@ -25,10 +25,12 @@ app = FastAPI(title="Agent Action Firewall", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
+    # Only the dashboard calls this API from a browser: GET/POST with a Bearer token, no cookies.
+    # Agents call it server-to-server, where CORS doesn't apply.
     allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(health_router)
