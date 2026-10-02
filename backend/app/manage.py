@@ -2,6 +2,7 @@
 
 Usage (from backend/):
     python -m app.manage create-approver <username>     # prompts for a password
+    python -m app.manage reset-approver-password <username>  # prompts for the new password
     python -m app.manage issue-agent-key <agent-name>   # prints the new key once
     python -m app.manage gmail-auth                     # one-time OAuth consent, prints GMAIL_REFRESH_TOKEN
     python -m app.manage check-credentials              # which executor credentials are set (values never printed)
@@ -16,7 +17,16 @@ from app.core.config import settings
 from app.core.db import async_session, engine
 from app.executors.gmail import GMAIL_SEND_SCOPE
 from app.executors.payments import TEST_KEY_PREFIXES
-from app.services.accounts import AccountError, create_approver, issue_agent_key
+from app.services.accounts import AccountError, create_approver, issue_agent_key, reset_approver_password
+
+
+def prompt_new_password(label: str = "Password") -> str:
+    password = getpass.getpass(f"{label}: ")
+    if password != getpass.getpass(f"Repeat {label.lower()}: "):
+        sys.exit("Passwords don't match.")
+    if len(password) < 8:
+        sys.exit("Password must be at least 8 characters.")
+    return password
 
 
 async def run(args: argparse.Namespace) -> None:
@@ -24,13 +34,13 @@ async def run(args: argparse.Namespace) -> None:
     try:
         async with async_session() as session:
             if args.command == "create-approver":
-                password = getpass.getpass("Password: ")
-                if password != getpass.getpass("Repeat password: "):
-                    sys.exit("Passwords don't match.")
-                if len(password) < 8:
-                    sys.exit("Password must be at least 8 characters.")
-                await create_approver(session, args.username, password)
+                await create_approver(session, args.username, prompt_new_password())
                 print(f"Created approver '{args.username}'.")
+            elif args.command == "reset-approver-password":
+                approver = await reset_approver_password(session, args.username, prompt_new_password("New password"))
+                print(f"Password reset for approver '{args.username}'.")
+                if not approver.is_active:
+                    print("Note: this approver is deactivated, so they still can't sign in.")
             else:
                 api_key = await issue_agent_key(session, args.agent_name)
                 print(f"API key for '{args.agent_name}' (shown once, any previous key no longer works):")
@@ -92,6 +102,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m app.manage")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("create-approver").add_argument("username")
+    commands.add_parser("reset-approver-password").add_argument("username")
     commands.add_parser("issue-agent-key").add_argument("agent_name")
     commands.add_parser("gmail-auth")
     commands.add_parser("check-credentials")
