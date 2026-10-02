@@ -20,6 +20,16 @@ async def create_approver(session: AsyncSession, username: str, password: str) -
     return approver
 
 
+async def reset_approver_password(session: AsyncSession, username: str, password: str) -> Approver:
+    """Set a new password for an existing approver. Their active/inactive status is left unchanged."""
+    approver = await session.scalar(select(Approver).where(Approver.username == username))
+    if approver is None:
+        raise AccountError(f"No approver named '{username}'.")
+    approver.password_hash = hash_password(password)
+    await session.commit()
+    return approver
+
+
 async def authenticate_approver(session: AsyncSession, username: str, password: str) -> Approver | None:
     approver = await session.scalar(select(Approver).where(Approver.username == username))
     if approver is None:
