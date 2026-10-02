@@ -1,5 +1,6 @@
 import uuid
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -16,15 +17,15 @@ from app.main import app
 from app.ratelimit import RateLimiter
 
 
-@pytest.fixture
-async def db() -> AsyncGenerator[AsyncSession, None]:
+@asynccontextmanager
+async def rolled_back_session(url: str) -> AsyncGenerator[AsyncSession, None]:
     """Session bound to an outer transaction that is always rolled back.
 
     Requires the database to be migrated (`alembic upgrade head`). Tests leave
     no rows behind, which matters here since the append-only tables can't be
     cleaned up with DELETE.
     """
-    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    engine = create_async_engine(url, poolclass=NullPool)
     async with engine.connect() as conn:
         trans = await conn.begin()
         session = AsyncSession(
@@ -36,6 +37,20 @@ async def db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
             await trans.rollback()
     await engine.dispose()
+
+
+@pytest.fixture
+async def db() -> AsyncGenerator[AsyncSession, None]:
+    """Connected with the backend's own (least-privilege) DATABASE_URL."""
+    async with rolled_back_session(settings.database_url) as session:
+        yield session
+
+
+@pytest.fixture
+async def owner_db() -> AsyncGenerator[AsyncSession, None]:
+    """Connected as the table owner (MIGRATION_DATABASE_URL), for tests of the DB's own safeguards."""
+    async with rolled_back_session(settings.owner_database_url) as session:
+        yield session
 
 
 @pytest.fixture
