@@ -6,7 +6,9 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-engine = create_async_engine(settings.database_url, echo=settings.environment == "development")
+# hide_parameters: bound values (payloads, API key and password hashes) never appear in
+# SQL logs or in database error messages that might end up in logs.
+engine = create_async_engine(settings.database_url, echo=settings.db_echo, hide_parameters=True)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 

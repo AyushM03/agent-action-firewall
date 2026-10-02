@@ -1,4 +1,9 @@
-"""DB-layer guarantees of the event store (ADR-001, TEST_PLAN.md: Audit Log)."""
+"""DB-layer guarantees of the event store (ADR-001, TEST_PLAN.md: Audit Log).
+
+These run as the table owner on purpose: the triggers and indexes must hold even
+for the one login that has full table privileges. The backend's own role is
+stopped earlier, by missing privileges (tests/test_db_privileges.py).
+"""
 
 import uuid
 
@@ -8,6 +13,11 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ActionRequest, Agent, AuditEvent, AuditEventType
+
+
+@pytest.fixture
+def db(owner_db: AsyncSession) -> AsyncSession:
+    return owner_db
 
 
 async def make_request(db: AsyncSession) -> ActionRequest:

@@ -20,8 +20,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# DB URL comes from app settings (.env), never from alembic.ini.
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# DB URL comes from app settings (.env), never from alembic.ini. Migrations run as the
+# table owner; the backend itself connects with the least-privilege DATABASE_URL.
+config.set_main_option("sqlalchemy.url", settings.owner_database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 

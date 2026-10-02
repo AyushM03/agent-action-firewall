@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,8 +11,17 @@ from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.core.config import settings
+from app.core.db import engine
+from app.core.safety import enforce_safe_configuration
 
-app = FastAPI(title="Agent Action Firewall")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    await enforce_safe_configuration(settings, engine)
+    yield
+
+
+app = FastAPI(title="Agent Action Firewall", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
