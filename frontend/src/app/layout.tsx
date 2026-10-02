@@ -26,7 +26,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      {/* Browser extensions (e.g. ColorZilla's cz-shortcut-listen) add attributes to <body> before
+          React hydrates. This only ignores attribute differences on <body> itself, not its children. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <AppShell>{children}</AppShell>
       </body>
     </html>
