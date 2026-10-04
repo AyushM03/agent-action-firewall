@@ -8,7 +8,10 @@ from app.core.config import settings
 
 # hide_parameters: bound values (payloads, API key and password hashes) never appear in
 # SQL logs or in database error messages that might end up in logs.
-engine = create_async_engine(settings.database_url, echo=settings.db_echo, hide_parameters=True)
+# pool_pre_ping: managed Postgres (e.g. Neon) drops idle connections when it scales to zero.
+engine = create_async_engine(
+    settings.database_url, echo=settings.db_echo, hide_parameters=True, pool_pre_ping=True
+)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 

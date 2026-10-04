@@ -1,7 +1,34 @@
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 DEFAULT_JWT_SECRET = "change-me-in-.env"
+
+# libpq-only query parameters that asyncpg doesn't accept as keyword arguments.
+_LIBPQ_ONLY_PARAMS = {"channel_binding"}
+
+
+def to_asyncpg_url(url: str) -> str:
+    """Accept a plain libpq URL as managed hosts hand it out (e.g. Neon's
+    `postgresql://...?sslmode=require&channel_binding=require`) and return the
+    `postgresql+asyncpg://...?ssl=require` form SQLAlchemy's asyncpg driver needs."""
+    if not url:
+        return url
+    parts = urlsplit(url)
+    scheme = parts.scheme
+    if scheme in ("postgres", "postgresql"):
+        scheme = "postgresql+asyncpg"
+    if scheme != "postgresql+asyncpg":
+        return url
+    query = []
+    for key, value in parse_qsl(parts.query, keep_blank_values=True):
+        if key == "sslmode":
+            key = "ssl"
+        if key not in _LIBPQ_ONLY_PARAMS:
+            query.append((key, value))
+    return urlunsplit((scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
 class Settings(BaseSettings):
@@ -30,6 +57,11 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
 
     cors_origins: list[str] = ["http://localhost:3000"]
+
+    @field_validator("database_url", "migration_database_url")
+    @classmethod
+    def _normalize_database_url(cls, value: str) -> str:
+        return to_asyncpg_url(value)
 
     @property
     def owner_database_url(self) -> str:
