@@ -1,0 +1,41 @@
+# Render Blueprint for the backend API (see docs/DEPLOY.md).
+# Postgres runs on Neon and Redis on Upstash; the frontend is on Vercel.
+# Secrets are `sync: false`: Render asks for them when the Blueprint is first applied.
+# MIGRATION_DATABASE_URL (the owner login) is deliberately absent: migrations run from an
+# operator machine, and the service only ever gets the least-privilege aaf_backend login.
+services:
+  - type: web
+    name: agent-action-firewall-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    buildFilter:
+      paths:
+        - backend/**
+      ignoredPaths:
+        - backend/tests/**
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GMAIL_CLIENT_ID
+        sync: false
+      - key: GMAIL_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_REFRESH_TOKEN
+        sync: false
+      - key: GMAIL_SENDER_ADDRESS
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
