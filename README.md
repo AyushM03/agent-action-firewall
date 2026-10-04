@@ -11,7 +11,7 @@ Most agent frameworks let agents act with almost no guardrails. This project is 
 - Database: PostgreSQL (event-sourced audit log)
 - Cache/Rate limiting: Redis
 - Integrations: Gmail API, Stripe (test mode)
-- Deployment: Vercel (frontend) + container host (backend)
+- Deployment: Vercel (frontend), Render (backend container), Neon (Postgres), Upstash (Redis)
 
 ## Docs
 See `docs/` for the full project documentation:
@@ -24,7 +24,22 @@ See `docs/` for the full project documentation:
 - `MEMORY.md` — current project state
 - `TEST_PLAN.md` — what "working" means
 - `SECURITY.md` — security requirements
+- `DEPLOY.md` — production deployment runbook
+
+## Run locally
+```bash
+docker compose up -d                      # Postgres (5434) + Redis (6380)
+cd backend
+python -m venv .venv && .venv/Scripts/pip install -r requirements.txt   # bin/ on macOS/Linux
+cp .env.example .env                      # then fill it in (see comments)
+alembic upgrade head && python -m app.seed
+uvicorn app.main:app --reload
+pytest                                    # live Gmail/Stripe tests: pytest -m integration
+
+cd ../frontend
+cp .env.example .env.local && npm install && npm run dev
+```
 
 ## Status
-Planning complete, implementation not started. See `docs/MEMORY.md` for the live status.
-"# agent-action-firewall" 
+Phases 1–8 (core firewall, approvals, Gmail/Stripe executors, dashboard, hardening) are done. Phase 9 (deploy) is in progress: see `docs/DEPLOY.md` and `docs/MEMORY.md`.
+ 

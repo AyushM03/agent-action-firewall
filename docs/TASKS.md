@@ -49,6 +49,7 @@
 - [x] Review against ARCHITECTURE.md and RULES.md: no violations found (route auth, executor isolation, pure policy, frontend only calls the backend)
 
 ## Phase 9: Deploy
+- [x] Production backend image (`backend/Dockerfile`), Render Blueprint (`render.yaml`), runbook (`docs/DEPLOY.md`), verified locally in production mode
 - [ ] Deploy frontend to Vercel
 - [ ] Deploy backend + Postgres + Redis
 - [ ] Configure production env vars (separate Gmail/Stripe test credentials if needed)
