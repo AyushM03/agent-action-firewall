@@ -50,7 +50,7 @@
 
 ## Phase 9: Deploy
 - [x] Production backend image (`backend/Dockerfile`), Render Blueprint (`render.yaml`), runbook (`docs/DEPLOY.md`), verified locally in production mode
-- [ ] Deploy frontend to Vercel
-- [ ] Deploy backend + Postgres + Redis
-- [ ] Configure production env vars (separate Gmail/Stripe test credentials if needed)
-- [ ] Production QA pass
+- [x] Deploy frontend to Vercel (https://agent-action-firewall.vercel.app)
+- [x] Deploy backend (Render) + Postgres (Neon) + Redis (Upstash)
+- [x] Configure production env vars, including `CORS_ORIGINS` for the Vercel origin
+- [x] Production QA pass (2026-10-11): health, CORS, auth, live Gmail send, Stripe test payment, approval flow, rate limit, invalid payload; manual checks in `docs/MANUAL_TESTS.md`

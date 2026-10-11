@@ -25,6 +25,7 @@ See `docs/` for the full project documentation:
 - `TEST_PLAN.md` — what "working" means
 - `SECURITY.md` — security requirements
 - `DEPLOY.md` — production deployment runbook
+- `MANUAL_TESTS.md` — manual checks against the live deployment
 
 ## Run locally
 ```bash
@@ -41,5 +42,10 @@ cp .env.example .env.local && npm install && npm run dev
 ```
 
 ## Status
-Phases 1–8 (core firewall, approvals, Gmail/Stripe executors, dashboard, hardening) are done. Phase 9 (deploy) is in progress: see `docs/DEPLOY.md` and `docs/MEMORY.md`.
+All 9 phases are complete, and the project is deployed:
+
+- Dashboard: https://agent-action-firewall.vercel.app
+- API: https://agent-action-firewall-api.onrender.com (free plan: the first request after 15 idle minutes takes about a minute)
+
+To check the live deployment by hand, see `docs/MANUAL_TESTS.md`.
  
