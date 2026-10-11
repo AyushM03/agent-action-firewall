@@ -18,7 +18,7 @@ See `docs/` for the full project documentation:
 - `PRD.md` — what and why
 - `ARCHITECTURE.md` — how it's built
 - `DESIGN.md` — how it looks
-- `RULES.md` — how AI/devs should code on this project
+- `RULES.md` — coding rules for this project
 - `TASKS.md` — current task breakdown
 - `DECISIONS.md` — permanent architectural decisions
 - `MEMORY.md` — current project state
